@@ -1,0 +1,15 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.pext
+
+# Local tooling and working files
+.backup/
+.template/
+.dotnet-home/
+.package-check/
+.claude/
+CLAUDE.md
+PLAN.md

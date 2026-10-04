@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/OptiScaler.Playnite/OptiScaler.Playnite.csproj" />
+  <Project Path="tests/OptiScaler.Playnite.Tests/OptiScaler.Playnite.Tests.csproj" />
+</Solution>

@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <AssemblyName>OptiScaler.Playnite</AssemblyName>
+    <RootNamespace>OptiScaler.Playnite</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <_EnableDefaultWindowsPlatform>false</_EnableDefaultWindowsPlatform>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AssemblyTitle>OptiScaler for Playnite</AssemblyTitle>
+    <AssemblyDescription>Manage OptiScaler installations from Playnite.</AssemblyDescription>
+    <Version>0.1.0</Version>
+    <PlayniteSdkPath Condition="'$(PlayniteSdkPath)' == ''">D:\Program\Playnite\Playnite.SDK.dll</PlayniteSdkPath>
+    <SharpCompressPath Condition="'$(SharpCompressPath)' == ''">D:\Program\Playnite\SharpCompress.dll</SharpCompressPath>
+    <NewtonsoftJsonPath Condition="'$(NewtonsoftJsonPath)' == ''">D:\Program\Playnite\Newtonsoft.Json.dll</NewtonsoftJsonPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Playnite.SDK">
+      <HintPath>$(PlayniteSdkPath)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SharpCompress">
+      <HintPath>$(SharpCompressPath)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(NewtonsoftJsonPath)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="extension.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="icon.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Localization\*.xaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="CreateExtensionPackage" AfterTargets="Build" Condition="'$(CreateExtensionPackage)' == 'true'">
+    <PropertyGroup>
+      <ExtensionOutput>$(OutputPath)OptiScaler.Playnite.pext</ExtensionOutput>
+      <ExtensionPackageStaging>$(IntermediateOutputPath)extension-package\</ExtensionPackageStaging>
+    </PropertyGroup>
+    <RemoveDir Directories="$(ExtensionPackageStaging)" />
+    <MakeDir Directories="$(ExtensionPackageStaging)" />
+    <ItemGroup>
+      <_ExtensionPackageFiles Include="$(OutputPath)**\*.*" Exclude="$(OutputPath)**\*.pext" />
+      <_ExtensionPackageDestinations Include="@(_ExtensionPackageFiles->'$(ExtensionPackageStaging)%(RecursiveDir)%(Filename)%(Extension)')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ExtensionPackageFiles)" DestinationFiles="@(_ExtensionPackageDestinations)" />
+    <Delete Files="$(ExtensionOutput)" />
+    <ZipDirectory SourceDirectory="$(ExtensionPackageStaging)" DestinationFile="$(ExtensionOutput)" Overwrite="true" />
+  </Target>
+</Project>

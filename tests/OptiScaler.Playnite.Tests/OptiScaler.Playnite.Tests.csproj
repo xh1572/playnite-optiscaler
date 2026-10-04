@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net462</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>OptiScaler.Playnite.Tests</AssemblyName>
+    <RootNamespace>OptiScaler.Playnite.Tests</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <_EnableDefaultWindowsPlatform>false</_EnableDefaultWindowsPlatform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <ProjectReference Include="..\..\src\OptiScaler.Playnite\OptiScaler.Playnite.csproj" />
+    <Reference Include="Playnite.SDK" Private="True">
+      <HintPath>D:\Program\Playnite\Playnite.SDK.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpCompress" Private="True">
+      <HintPath>D:\Program\Playnite\SharpCompress.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json" Private="True">
+      <HintPath>D:\Program\Playnite\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

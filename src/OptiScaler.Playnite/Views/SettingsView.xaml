@@ -1,0 +1,65 @@
+<UserControl x:Class="OptiScaler.Playnite.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="380"
+             Foreground="{DynamicResource PrimaryTextBrush}"
+             FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="13"
+             TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
+    <!-- Background stays transparent so the page blends into Playnite's own settings window. -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel Margin="16" MaxWidth="720" HorizontalAlignment="Left">
+        <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="OptiScaler 安装包" Style="{StaticResource SectionTitleText}" />
+                <TextBlock Text="本地 zip、7z 或已解压目录。也可以在侧边栏中下载发布版本。" Style="{StaticResource CaptionText}" Margin="0,3,0,10" TextWrapping="Wrap" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Click="BrowsePackage_Click" Margin="8,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource IconText}" Text="&#xE838;" Margin="0,0,8,0" />
+                            <TextBlock Text="浏览..." />
+                        </StackPanel>
+                    </Button>
+                    <TextBox Text="{Binding Settings.PackagePath, UpdateSourceTrigger=PropertyChanged}" Tag="未选择安装包" />
+                </DockPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource CardBorder}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="默认注入 DLL" Style="{StaticResource SectionTitleText}" />
+                <TextBlock Text="新游戏的默认注入方式。通常使用 dxgi.dll，游戏无法识别时再尝试其他方式。" Style="{StaticResource CaptionText}" Margin="0,3,0,10" TextWrapping="Wrap" />
+                <ComboBox Width="220" HorizontalAlignment="Left" SelectedValuePath="Content" SelectedValue="{Binding Settings.InjectionMethod}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Content}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                    <ComboBoxItem Content="dxgi.dll" />
+                    <ComboBoxItem Content="winmm.dll" />
+                    <ComboBoxItem Content="d3d12.dll" />
+                    <ComboBoxItem Content="dbghelp.dll" />
+                    <ComboBoxItem Content="version.dll" />
+                    <ComboBoxItem Content="wininet.dll" />
+                    <ComboBoxItem Content="winhttp.dll" />
+                    <ComboBoxItem Content="OptiScaler.asi" />
+                </ComboBox>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource CardBorder}">
+            <StackPanel>
+                <CheckBox Content="打开管理页面时检查更新信息" FontWeight="SemiBold" IsChecked="{Binding Settings.CheckForUpdatesOnOpen}" />
+                <TextBlock Text="每次打开侧边栏时从 GitHub 刷新当前频道的版本列表。" Style="{StaticResource CaptionText}" Margin="28,4,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>
