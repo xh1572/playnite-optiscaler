@@ -26,6 +26,8 @@ namespace OptiScaler.Playnite.Views
             if (string.Equals(text, "stable", StringComparison.OrdinalIgnoreCase)) return "稳定版";
             if (string.Equals(text, "beta", StringComparison.OrdinalIgnoreCase)) return "Beta 测试版";
             if (string.Equals(text, "nightly", StringComparison.OrdinalIgnoreCase)) return "Nightly 每日版";
+            if (string.Equals(text, "upscaler", StringComparison.OrdinalIgnoreCase)) return "仅超分 DLL";
+            if (string.Equals(text, "all", StringComparison.OrdinalIgnoreCase)) return "包内全部 DLL";
             return text ?? string.Empty;
         }
 

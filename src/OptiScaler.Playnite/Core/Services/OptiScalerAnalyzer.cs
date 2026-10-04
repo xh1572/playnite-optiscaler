@@ -64,6 +64,15 @@ namespace OptiScaler.Playnite.Core.Services
                 status.Version = managedManifest.OptiScalerVersion;
                 status.InjectionMethod = managedManifest.InjectionMethod;
                 status.InstalledDirectory = managedManifest.InstalledGameDirectory;
+                if (!managedManifest.IncludesOptiScaler)
+                {
+                    // Swap-only: no OptiScaler is managed, only FSR4 DLLs.
+                    status.State = OptiScalerInstallState.NotInstalled;
+                    status.Version = null;
+                    status.Message = "未安装 OptiScaler；FSR4 DLL 已替换为 " + (managedManifest.Fsr4SwapVersion ?? "Extras 版本") + "。";
+                    if (Directory.Exists(status.InstalledDirectory)) PopulateDetectedComponents(status, managedManifest, status.InstalledDirectory);
+                    return status;
+                }
                 if (Directory.Exists(status.InstalledDirectory) && HasAnyMarker(status.InstalledDirectory, managedManifest))
                 {
                     status.ConfigurationPath = FindConfigurationPath(status.InstalledDirectory);

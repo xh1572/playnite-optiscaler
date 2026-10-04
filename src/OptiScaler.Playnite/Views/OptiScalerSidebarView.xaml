@@ -357,6 +357,51 @@
                                         <ComboBox ItemsSource="{Binding DataContext.ProfileNames, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" ToolTip="留空则使用安装包自带配置；选择 profile 后会在安装时套用。" />
                                     </StackPanel>
                                 </WrapPanel>
+
+                                <!-- FSR4 DLL swap: independent of the OptiScaler install above. -->
+                                <Border Style="{StaticResource ChipBorder}" Padding="14,12" Margin="0,8,0,10" HorizontalAlignment="Stretch">
+                                    <StackPanel>
+                                        <DockPanel Margin="0,0,0,8">
+                                            <local:HelpLabel Text="FSR4 DLL 替换" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}"
+                                                             Description="用 OptiScaler Extras 提供的 FSR4 DLL 替换游戏自带的 amd_fidelityfx_upscaler_dx12.dll / amdxcffx64.dll，不需要安装 OptiScaler。INT8 版本适合 RDNA2/RDNA3 等非 RDNA4 显卡，FP8 版本适合 RDNA4。原始文件会备份，可随时还原；已安装 OptiScaler 时更新后会自动重新替换。" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Fsr4SwapText}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                        <WrapPanel>
+                                            <StackPanel Style="{StaticResource FieldPanel}" Width="260">
+                                                <TextBlock Text="FSR4 版本" Style="{StaticResource CaptionText}" Margin="0,0,0,5" />
+                                                <ComboBox ItemsSource="{Binding DataContext.Fsr4Releases, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          SelectedItem="{Binding DataContext.SelectedFsr4Release, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          Tag="点击“获取版本”加载列表" ToolTip="INT8 适合 RDNA2/RDNA3 等显卡；FP8 适合 RDNA4。" />
+                                            </StackPanel>
+                                            <StackPanel Style="{StaticResource FieldPanel}">
+                                                <TextBlock Text="替换范围" Style="{StaticResource CaptionText}" Margin="0,0,0,5" />
+                                                <ComboBox ItemsSource="{Binding DataContext.Fsr4ScopeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          SelectedItem="{Binding DataContext.Fsr4Scope, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          ToolTip="自动：替换超分 DLL，以及游戏已有的其它 FidelityFX DLL；仅超分 DLL：只替换超分；包内全部 DLL：把包里的全部 DLL 放进游戏目录。" />
+                                            </StackPanel>
+                                        </WrapPanel>
+                                        <WrapPanel>
+                                            <Button Margin="0,0,8,0" Command="{Binding DataContext.CheckFsr4ReleasesCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" ToolTip="从 OptiScaler Extras（INT8）和 Extras-FP8 获取版本列表。">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource IconText}" Text="&#xE895;" Margin="0,0,8,0" />
+                                                    <TextBlock Text="获取版本" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Style="{StaticResource AccentButton}" Margin="0,0,8,0" Command="{Binding DataContext.SwapFsr4Command, RelativeSource={RelativeSource AncestorType=UserControl}}" ToolTip="下载选中的 FSR4 版本并替换游戏中的 FSR DLL。">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource IconText}" Text="&#xE8AB;" Margin="0,0,8,0" />
+                                                    <TextBlock Text="替换 FSR4" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Command="{Binding DataContext.RestoreFsr4Command, RelativeSource={RelativeSource AncestorType=UserControl}}" ToolTip="把替换过的 FSR4 DLL 恢复为替换前的文件。">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Style="{StaticResource IconText}" Text="&#xE7A7;" Margin="0,0,8,0" />
+                                                    <TextBlock Text="还原 FSR4" />
+                                                </StackPanel>
+                                            </Button>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                         <!-- Action bar -->

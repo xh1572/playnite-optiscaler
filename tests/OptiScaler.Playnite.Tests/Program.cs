@@ -56,8 +56,18 @@ namespace OptiScaler.Playnite.Tests
 
                 var package = Environment.GetEnvironmentVariable("OPTISCALER_TEST_PACKAGE");
                 if (!string.IsNullOrWhiteSpace(package) && File.Exists(package)) RunInstallationSmokeTest(root, package);
+                var fsr4Package = Environment.GetEnvironmentVariable("OPTISCALER_TEST_FSR4_PACKAGE");
+                if (!string.IsNullOrWhiteSpace(fsr4Package) && File.Exists(fsr4Package)) RunFsr4PackageSmokeTest(root, fsr4Package);
                 Console.WriteLine("CORE TEST PASS");
                 return 0;
+            }
+            catch (Exception ex)
+            {
+                // Write plain fields: the default console output can fail on localized messages.
+                var report = ex.GetType().FullName + ": " + ex.Message + Environment.NewLine + ex.StackTrace;
+                try { File.WriteAllText(Path.Combine(Path.GetTempPath(), "OptiScaler.Playnite.Tests.failure.txt"), report, new System.Text.UTF8Encoding(false)); } catch { }
+                Console.WriteLine("CORE TEST FAIL");
+                return 1;
             }
             finally
             {
@@ -143,6 +153,8 @@ namespace OptiScaler.Playnite.Tests
             Assert(new OptiScalerAnalyzer(dataPath).Analyze(game).State == OptiScalerInstallState.NotInstalled, "corrupt manifest analysis");
             AssertThrows<InvalidOperationException>(() => new InstallationService(dataPath).Uninstall(game));
 
+            RunFsr4SwapTests(root);
+
             // Unreal layout: Binaries\Win64 wins over the launcher stub in the game root.
             game = CreateGame(root, "unreal");
             var win64 = Path.Combine(game.InstallDirectory, "Game", "Binaries", "Win64");
@@ -150,6 +162,70 @@ namespace OptiScaler.Playnite.Tests
             File.WriteAllText(Path.Combine(game.InstallDirectory, "Launcher.exe"), "stub");
             game.ExecutablePaths.Add(Path.Combine(game.InstallDirectory, "Launcher.exe"));
             Assert(string.Equals(new InstallationService(Path.Combine(root, "data-unreal")).ResolveInstallDirectory(game), win64, StringComparison.OrdinalIgnoreCase), "unreal directory resolution");
+        }
+
+        private static void RunFsr4SwapTests(string root)
+        {
+            var upscaler = Fsr4DllCatalog.LegacyUpscalerFileName;
+            var fsr4Package = Path.Combine(root, "packages", "FSR4_INT8_test");
+            Directory.CreateDirectory(fsr4Package);
+            File.WriteAllText(Path.Combine(fsr4Package, upscaler), "fsr4-int8");
+            File.WriteAllText(Path.Combine(fsr4Package, "amd_fidelityfx_loader_dx12.dll"), "fsr4-loader");
+
+            // Swap-only: replace the game's own DLL, skip effects it does not ship, restore cleanly.
+            var game = CreateGame(root, "fsr4-only");
+            var dir = game.InstallDirectory;
+            File.WriteAllText(Path.Combine(dir, upscaler), "game-fsr3");
+            var dataPath = Path.Combine(root, "data-fsr4");
+            var service = new InstallationService(dataPath);
+            var swap = service.SwapFsr4Dlls(game, fsr4Package, "FSR 4.0.2c", "auto");
+            Assert(swap.Files.Count == 1 && File.ReadAllText(Path.Combine(dir, upscaler)) == "fsr4-int8", "fsr4 swap replaces upscaler");
+            Assert(!File.Exists(Path.Combine(dir, "amd_fidelityfx_loader_dx12.dll")), "fsr4 auto scope skips missing effects");
+            var status = new OptiScalerAnalyzer(dataPath).Analyze(game);
+            Assert(status.HasFsr4Swap && status.IsSwapOnly && status.State == OptiScalerInstallState.NotInstalled, "fsr4 swap-only status");
+            // Swapping again must not overwrite the real original in the backup.
+            service.SwapFsr4Dlls(game, fsr4Package, "FSR 4.0.2c", "auto");
+            service.RestoreFsr4Dlls(game);
+            Assert(File.ReadAllText(Path.Combine(dir, upscaler)) == "game-fsr3", "fsr4 restore brings back original");
+            Assert(new BackupStore(dataPath).LoadManifest(dir) == null, "fsr4 swap-only restore removes manifest");
+
+            // "all" scope adds files the game did not have; restore deletes them again.
+            service.SwapFsr4Dlls(game, fsr4Package, "FSR 4.0.2c", "all");
+            Assert(File.Exists(Path.Combine(dir, "amd_fidelityfx_loader_dx12.dll")), "fsr4 all scope adds effects");
+            service.RestoreFsr4Dlls(game);
+            Assert(!File.Exists(Path.Combine(dir, "amd_fidelityfx_loader_dx12.dll")) && File.ReadAllText(Path.Combine(dir, upscaler)) == "game-fsr3", "fsr4 restore removes added files");
+
+            // On top of OptiScaler: swap over the DLL OptiScaler installed, survive an update, then
+            // uninstall must remove everything and return the game's original file.
+            game = CreateGame(root, "fsr4-opti");
+            dir = game.InstallDirectory;
+            File.WriteAllText(Path.Combine(dir, upscaler), "game-fsr3");
+            dataPath = Path.Combine(root, "data-fsr4-opti");
+            service = new InstallationService(dataPath);
+            var optiPackage = CreatePackage(root, "OptiScaler_fsr4", "opti", upscaler);
+            service.Install(game, optiPackage, "dxgi.dll", "1.0.0");
+            Assert(File.ReadAllText(Path.Combine(dir, upscaler)) == "opti-" + upscaler, "optiscaler installs its fsr dll");
+            service.SwapFsr4Dlls(game, fsr4Package, "FSR 4.0.2c", "upscaler");
+            Assert(File.ReadAllText(Path.Combine(dir, upscaler)) == "fsr4-int8", "fsr4 swap over optiscaler");
+            service.Install(game, optiPackage, "dxgi.dll", "1.0.1");
+            Assert(File.ReadAllText(Path.Combine(dir, upscaler)) == "fsr4-int8", "fsr4 swap re-applied after update");
+            service.RestoreFsr4Dlls(game);
+            Assert(File.ReadAllText(Path.Combine(dir, upscaler)) == "opti-" + upscaler, "fsr4 restore returns optiscaler copy");
+            service.SwapFsr4Dlls(game, fsr4Package, "FSR 4.0.2c", "upscaler");
+            service.Uninstall(game);
+            Assert(File.ReadAllText(Path.Combine(dir, upscaler)) == "game-fsr3" && !File.Exists(Path.Combine(dir, "dxgi.dll")), "uninstall after fsr4 swap restores game");
+
+            // A failed swap (locked target) rolls back and leaves no swap-only manifest behind.
+            game = CreateGame(root, "fsr4-fail");
+            dir = game.InstallDirectory;
+            var locked = Path.Combine(dir, upscaler);
+            File.WriteAllText(locked, "game-fsr3");
+            File.SetAttributes(locked, FileAttributes.ReadOnly);
+            dataPath = Path.Combine(root, "data-fsr4-fail");
+            AssertThrows<UnauthorizedAccessException>(() => new InstallationService(dataPath).SwapFsr4Dlls(game, fsr4Package, "x", "auto"));
+            File.SetAttributes(locked, FileAttributes.Normal);
+            Assert(File.ReadAllText(locked) == "game-fsr3", "failed fsr4 swap keeps original");
+            Assert(new OptiScalerAnalyzer(dataPath).Analyze(game).State == OptiScalerInstallState.NotInstalled, "failed fsr4 swap analyzer state");
         }
 
         private static string CreatePackage(string root, string name, string tag, string extraFile)
@@ -173,6 +249,19 @@ namespace OptiScaler.Playnite.Tests
                 InstallDirectory = directory,
                 IsInstalledInPlaynite = true
             };
+        }
+
+        // Real OptiScaler Extras archive (.7z) against a temporary game folder only.
+        private static void RunFsr4PackageSmokeTest(string root, string package)
+        {
+            var game = CreateGame(root, "fsr4-real");
+            var original = Path.Combine(game.InstallDirectory, Fsr4DllCatalog.LegacyUpscalerFileName);
+            File.WriteAllText(original, "game-fsr3");
+            var service = new InstallationService(Path.Combine(root, "data-fsr4-real"));
+            var result = service.SwapFsr4Dlls(game, package, Path.GetFileNameWithoutExtension(package), "auto");
+            Assert(result.Files.Count >= 1 && new FileInfo(original).Length > 1024 * 1024, "real fsr4 package swap");
+            service.RestoreFsr4Dlls(game);
+            Assert(File.ReadAllText(original) == "game-fsr3", "real fsr4 package restore");
         }
 
         private static void RunInstallationSmokeTest(string root, string package)

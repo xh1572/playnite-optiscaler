@@ -38,6 +38,10 @@ namespace OptiScaler.Playnite.Core.Models
         public List<string> Components { get; set; } = new List<string>();
         public string ConfigurationPath { get; set; }
         public bool IsManaged => Manifest != null && !string.IsNullOrWhiteSpace(Manifest.OperationId);
+        public bool HasFsr4Swap => Manifest != null && Manifest.IncludesFsr4Swap;
+        public string Fsr4SwapVersion => Manifest?.Fsr4SwapVersion;
+        // A swap-only manifest manages FSR4 DLLs but no OptiScaler install.
+        public bool IsSwapOnly => HasFsr4Swap && !Manifest.IncludesOptiScaler;
 
         public bool IsInstalled => State == OptiScalerInstallState.Installed ||
                                     State == OptiScalerInstallState.UpdateAvailable ||

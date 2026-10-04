@@ -41,6 +41,22 @@ namespace OptiScaler.Playnite.Core.Models
         // files snapshotted from it, so a failed update can restore the previous installation.
         public InstallationManifest PreviousManifest { get; set; }
         public List<string> UpdateBackupFiles { get; set; } = new List<string>();
+        // FSR4 DLL swap (OptiScaler Extras). Can coexist with an OptiScaler install on the same
+        // manifest, or exist alone when IncludesOptiScaler is false (swap-only mode).
+        public bool IncludesFsr4Swap { get; set; }
+        public string Fsr4SwapVersion { get; set; }
+        // Cached package and file selection, used to re-apply the swap after an OptiScaler update.
+        public string Fsr4SwapPackagePath { get; set; }
+        public string Fsr4SwapScope { get; set; }
+        public List<string> Fsr4SwapFiles { get; set; } = new List<string>();
+        // Swapped files the manifest already owned (e.g. OptiScaler's own FSR DLL). Their pre-swap
+        // bytes live in the backup's fsr4-files scope so a restore returns to the installed copy.
+        public List<string> Fsr4PreservedFiles { get; set; } = new List<string>();
+    }
+
+    public sealed class Fsr4SwapResult
+    {
+        public List<string> Files { get; } = new List<string>();
     }
 
     public sealed class UninstallResult

@@ -213,19 +213,28 @@ namespace OptiScaler.Playnite.Core.Storage
         /// Kept apart from the original-game backups so a failed update can restore it.
         /// </summary>
         public bool BackupUpdateFile(string gameRoot, string actualInstallDirectory, string relativePath)
+            => BackupScopedFile(gameRoot, actualInstallDirectory, relativePath, UpdateFilesDirectoryName);
+
+        public bool RestoreUpdateFile(string gameRoot, string actualInstallDirectory, string relativePath)
+            => RestoreScopedFile(gameRoot, actualInstallDirectory, relativePath, UpdateFilesDirectoryName);
+
+        public void DeleteUpdateFiles(string gameRoot) => DeleteScope(gameRoot, UpdateFilesDirectoryName);
+
+        /// <summary>Copies a game file into a named sub-store of this game's backup, apart from the originals in "files".</summary>
+        public bool BackupScopedFile(string gameRoot, string actualInstallDirectory, string relativePath, string scope)
         {
             var source = CombineRelative(actualInstallDirectory, relativePath);
             if (!File.Exists(source)) return false;
-            var target = CombineRelative(Path.Combine(GetBackupRoot(gameRoot), UpdateFilesDirectoryName), relativePath);
+            var target = CombineRelative(Path.Combine(GetBackupRoot(gameRoot), scope), relativePath);
             var targetDirectory = Path.GetDirectoryName(target);
             if (!string.IsNullOrEmpty(targetDirectory)) Directory.CreateDirectory(targetDirectory);
             File.Copy(source, target, true);
             return true;
         }
 
-        public bool RestoreUpdateFile(string gameRoot, string actualInstallDirectory, string relativePath)
+        public bool RestoreScopedFile(string gameRoot, string actualInstallDirectory, string relativePath, string scope)
         {
-            var source = CombineRelative(Path.Combine(GetBackupRoot(gameRoot), UpdateFilesDirectoryName), relativePath);
+            var source = CombineRelative(Path.Combine(GetBackupRoot(gameRoot), scope), relativePath);
             if (!File.Exists(source)) return false;
             var target = CombineRelative(actualInstallDirectory, relativePath);
             var targetDirectory = Path.GetDirectoryName(target);
@@ -234,9 +243,9 @@ namespace OptiScaler.Playnite.Core.Storage
             return true;
         }
 
-        public void DeleteUpdateFiles(string gameRoot)
+        public void DeleteScope(string gameRoot, string scope)
         {
-            var path = Path.Combine(GetBackupRoot(gameRoot), UpdateFilesDirectoryName);
+            var path = Path.Combine(GetBackupRoot(gameRoot), scope);
             try { if (Directory.Exists(path)) Directory.Delete(path, true); } catch { }
         }
 

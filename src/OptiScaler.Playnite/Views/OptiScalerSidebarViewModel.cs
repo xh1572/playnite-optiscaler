@@ -78,6 +78,10 @@ namespace OptiScaler.Playnite.Views
         public bool CanEditConfiguration => status != null && status.IsInstalled && status.Manifest != null && !string.IsNullOrWhiteSpace(status.ConfigurationPath);
         public bool IsInstalled => status != null && status.IsInstalled;
         public OptiScalerStatus Status => status;
+        public bool HasFsr4Swap => status != null && status.HasFsr4Swap;
+        public string Fsr4SwapText => HasFsr4Swap
+            ? "已替换为 " + (status.Fsr4SwapVersion ?? "Extras 版本") + "：" + string.Join("、", status.Manifest.Fsr4SwapFiles.Select(Path.GetFileName))
+            : "未替换。替换后可随时还原为原始文件。";
         public string IconPath => Entry.ManagedGame.IconPath;
         public string Initial => string.IsNullOrWhiteSpace(Name) ? "?" : StringInfo.GetNextTextElement(Name.Trim()).ToUpperInvariant();
         public bool HasComponents => Components.Any();
@@ -237,7 +241,16 @@ namespace OptiScaler.Playnite.Views
         private DateTime lastRefreshUtc = DateTime.MinValue;
         private int refreshRequestId;
         private string packageVersion;
+        private ReleaseInfo selectedFsr4Release;
+        private string fsr4Scope = "auto";
         private static readonly TimeSpan RefreshCacheDuration = TimeSpan.FromSeconds(3);
+        public ObservableCollection<ReleaseInfo> Fsr4Releases { get; } = new ObservableCollection<ReleaseInfo>();
+        public IReadOnlyList<string> Fsr4ScopeOptions { get; } = new[] { "auto", "upscaler", "all" };
+        public ReleaseInfo SelectedFsr4Release { get => selectedFsr4Release; set { selectedFsr4Release = value; OnPropertyChanged(nameof(SelectedFsr4Release)); RaiseCommands(); } }
+        public string Fsr4Scope { get => fsr4Scope; set { fsr4Scope = string.IsNullOrWhiteSpace(value) ? "auto" : value; OnPropertyChanged(nameof(Fsr4Scope)); } }
+        public ICommand CheckFsr4ReleasesCommand { get; }
+        public ICommand SwapFsr4Command { get; }
+        public ICommand RestoreFsr4Command { get; }
         public IReadOnlyList<string> UpscalerOptions { get; } = new[] { "auto", "fsr21", "fsr22", "fsr31", "fsr21_12", "fsr22_12", "fsr31_12", "xess", "xess_12", "dlss" };
         public IReadOnlyList<string> FrameGenerationOptions { get; } = new[] { "auto", "true", "false" };
         public IReadOnlyList<string> FrameGenerationInputOptions { get; } = new[] { "auto", "nofg", "dlssg", "nvngxfg", "nukems", "fsrfg", "upscaler", "fsrfg30" };
@@ -347,6 +360,11 @@ namespace OptiScaler.Playnite.Views
             SaveQuickConfigurationCommand = new DelegateCommand(SaveQuickConfiguration, CanConfigure);
             OpenFolderCommand = new DelegateCommand(OpenFolder, () => SelectedGame != null && Directory.Exists(SelectedGame.InstallDirectory));
             EditGameListCommand = new DelegateCommand(EditGameList, () => !IsBusy);
+            CheckFsr4ReleasesCommand = new DelegateCommand(CheckFsr4Releases, () => !IsBusy);
+            SwapFsr4Command = new DelegateCommand(SwapFsr4, CanSwapFsr4);
+            RestoreFsr4Command = new DelegateCommand(RestoreFsr4, CanRestoreFsr4);
+            foreach (var release in releaseService.GetCachedFsr4Releases()) Fsr4Releases.Add(release);
+            SelectedFsr4Release = Fsr4Releases.FirstOrDefault();
             foreach (var release in releaseService.GetCachedReleases(releaseChannel)) Releases.Add(release);
             SelectedRelease = Releases.OrderByDescending(x => x.PublishedAt).FirstOrDefault();
             if (settings.Settings.CheckForUpdatesOnOpen) CheckReleases();
@@ -621,6 +639,86 @@ namespace OptiScaler.Playnite.Views
             }
         }
 
+        private async void CheckFsr4Releases()
+        {
+            if (IsBusy) return;
+            IsBusy = true;
+            OperationText = "正在获取 FSR4 版本列表...";
+            try
+            {
+                var releases = await releaseService.GetFsr4ReleasesAsync(true);
+                var previous = SelectedFsr4Release?.AssetUrl;
+                Fsr4Releases.Clear();
+                foreach (var release in releases) Fsr4Releases.Add(release);
+                SelectedFsr4Release = Fsr4Releases.FirstOrDefault(x => x.AssetUrl == previous) ?? Fsr4Releases.FirstOrDefault();
+                OperationText = Fsr4Releases.Count == 0 ? "没有找到可用的 FSR4 版本" : "FSR4 版本列表已刷新";
+            }
+            catch (Exception ex)
+            {
+                OperationText = "获取 FSR4 版本失败：" + ex.Message;
+                plugin.Api.Notifications.Add("OptiScaler.Fsr4", ex.Message, global::Playnite.SDK.NotificationType.Error);
+            }
+            finally { IsBusy = false; }
+        }
+
+        private async void SwapFsr4()
+        {
+            if (!CanSwapFsr4()) return;
+            var row = SelectedGame;
+            var release = SelectedFsr4Release;
+            var scope = Fsr4Scope;
+            var message = "确定要把“" + row.Name + "”的 FSR4 DLL 替换为 " + release.Name + " 吗？\n\n原始文件会先备份，之后可以用“还原 FSR4”恢复。";
+            if (plugin.Api.Dialogs.ShowMessage(message, "FSR4 Swap", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+
+            IsBusy = true;
+            try
+            {
+                var progress = new Progress<double>(value => OperationText = "正在下载 " + release.Name + "（" + Math.Round(value * 100) + "%）...");
+                OperationText = "正在下载 " + release.Name + "...";
+                var package = await releaseService.DownloadReleaseAsync(release, progress);
+                OperationText = "正在替换 FSR4 DLL...";
+                var result = await Task.Run(() => installationService.SwapFsr4Dlls(row.Entry.ManagedGame, package, release.Name, scope));
+                OperationText = "FSR4 已替换：" + string.Join("、", result.Files.Select(Path.GetFileName));
+            }
+            catch (Exception ex)
+            {
+                OperationText = "FSR4 替换失败：" + ex.Message;
+                plugin.Api.Notifications.Add("OptiScaler.Fsr4", ex.Message, global::Playnite.SDK.NotificationType.Error);
+            }
+            finally
+            {
+                IsBusy = false;
+                RefreshForGame(row.Entry.ManagedGame.Id);
+            }
+        }
+
+        private async void RestoreFsr4()
+        {
+            if (!CanRestoreFsr4()) return;
+            var row = SelectedGame;
+            if (plugin.Api.Dialogs.ShowMessage("确定要把“" + row.Name + "”的 FSR4 DLL 还原为替换前的文件吗？", "FSR4 Swap", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+            IsBusy = true;
+            OperationText = "正在还原 FSR4 DLL...";
+            try
+            {
+                await Task.Run(() => installationService.RestoreFsr4Dlls(row.Entry.ManagedGame));
+                OperationText = "FSR4 DLL 已还原";
+            }
+            catch (Exception ex)
+            {
+                OperationText = "FSR4 还原失败：" + ex.Message;
+                plugin.Api.Notifications.Add("OptiScaler.Fsr4", ex.Message, global::Playnite.SDK.NotificationType.Error);
+            }
+            finally
+            {
+                IsBusy = false;
+                RefreshForGame(row.Entry.ManagedGame.Id);
+            }
+        }
+
+        private bool CanSwapFsr4() => !IsBusy && SelectedGame != null && SelectedFsr4Release != null && SelectedGame.Entry.ManagedGame.IsInstalledInPlaynite && !SelectedGame.Entry.ManagedGame.IsRunning;
+        private bool CanRestoreFsr4() => !IsBusy && SelectedGame != null && SelectedGame.HasFsr4Swap && !SelectedGame.Entry.ManagedGame.IsRunning;
+
         private void OpenFolder()
         {
             try { System.Diagnostics.Process.Start("explorer.exe", SelectedGame.InstallDirectory); } catch { }
@@ -654,6 +752,9 @@ namespace OptiScaler.Playnite.Views
             (SaveQuickConfigurationCommand as DelegateCommand)?.RaiseCanExecuteChanged();
             (OpenFolderCommand as DelegateCommand)?.RaiseCanExecuteChanged();
             (EditGameListCommand as DelegateCommand)?.RaiseCanExecuteChanged();
+            (CheckFsr4ReleasesCommand as DelegateCommand)?.RaiseCanExecuteChanged();
+            (SwapFsr4Command as DelegateCommand)?.RaiseCanExecuteChanged();
+            (RestoreFsr4Command as DelegateCommand)?.RaiseCanExecuteChanged();
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

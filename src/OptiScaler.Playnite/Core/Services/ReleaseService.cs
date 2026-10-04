@@ -19,6 +19,8 @@ namespace OptiScaler.Playnite.Core.Services
         public string AssetName { get; set; }
         public string AssetUrl { get; set; }
         public bool IsPrerelease { get; set; }
+        // FSR4 Extras only: "INT8" or "FP8".
+        public string Variant { get; set; }
     }
 
     public sealed class ReleaseService : IDisposable
@@ -113,6 +115,60 @@ namespace OptiScaler.Playnite.Core.Services
             return destination;
         }
 
+        // FSR4 Swap packages come from the OptiScaler Client Extras repos: INT8 builds (also for
+        // RDNA2/3 and other GPUs) and the FP8 mirror synced from AMD's FidelityFX SDK (RDNA4).
+        private static readonly Tuple<string, string, string>[] Fsr4Repositories =
+        {
+            Tuple.Create("Optiscaler-Client", "OptiScaler-Extras", "INT8"),
+            Tuple.Create("Optiscaler-Client", "Optiscaler-Extras-FP8", "FP8")
+        };
+
+        public IReadOnlyList<ReleaseInfo> GetCachedFsr4Releases() => LoadCachedReleases("fsr4");
+
+        public async Task<IReadOnlyList<ReleaseInfo>> GetFsr4ReleasesAsync(bool force = false, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var cached = LoadCachedReleases("fsr4");
+            var cachePath = GetCachePath("fsr4");
+            var checkedAt = File.Exists(cachePath) ? File.GetLastWriteTimeUtc(cachePath) : DateTime.MinValue;
+            if (!force && cached.Count > 0 && DateTime.UtcNow - checkedAt < TimeSpan.FromMinutes(15)) return cached;
+            var result = new List<ReleaseInfo>();
+            Exception lastError = null;
+            foreach (var repository in Fsr4Repositories)
+            {
+                try
+                {
+                    using (var response = await client.GetAsync("https://api.github.com/repos/" + repository.Item1 + "/" + repository.Item2 + "/releases?per_page=30", cancellationToken))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        var json = await response.Content.ReadAsStringAsync();
+                        var releases = JsonConvert.DeserializeObject<List<GitHubRelease>>(json) ?? new List<GitHubRelease>();
+                        foreach (var release in releases.Where(r => !r.draft))
+                        {
+                            var info = ToReleaseInfo(release, "fsr4");
+                            if (info == null) continue;
+                            var label = (release.tag_name ?? string.Empty).Replace('_', ' ').Trim();
+                            if (label.StartsWith("FSR", StringComparison.OrdinalIgnoreCase)) label = "FSR " + label.Substring(3).Trim();
+                            info.Name = label + " · " + repository.Item3;
+                            info.Variant = repository.Item3;
+                            result.Add(info);
+                        }
+                    }
+                }
+                catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+                {
+                    lastError = ex;
+                }
+            }
+            if (result.Count == 0)
+            {
+                if (cached.Count > 0) return cached;
+                if (lastError != null) throw lastError;
+            }
+            result = result.OrderByDescending(x => x.PublishedAt).ToList();
+            File.WriteAllText(cachePath, JsonConvert.SerializeObject(result, Formatting.Indented));
+            return result;
+        }
+
         public void Dispose() => client.Dispose();
 
         private static ReleaseInfo ToReleaseInfo(GitHubRelease release, string channel)
@@ -162,6 +218,7 @@ namespace OptiScaler.Playnite.Core.Services
         {
             if (string.Equals(channel, "beta", StringComparison.OrdinalIgnoreCase)) return "beta";
             if (string.Equals(channel, "nightly", StringComparison.OrdinalIgnoreCase)) return "nightly";
+            if (string.Equals(channel, "fsr4", StringComparison.OrdinalIgnoreCase)) return "fsr4";
             return "stable";
         }
 
