@@ -1,0 +1,11 @@
+AddonId: 1d4f96d1-ea52-4f70-9b3d-e2ec0a7d5f70
+Packages:
+  - Version: 0.1.0
+    RequiredApiVersion: 6.18.0
+    ReleaseDate: 2026-10-05
+    PackageUrl: https://github.com/xh1572/playnite-optiscaler/releases/download/v0.1.0/OptiScaler.Playnite_0.1.0.pext
+    Changelog:
+      - First release.
+      - Manage OptiScaler installs (stable / beta / nightly) for installed Playnite games with backups and rollback.
+      - OptiScaler.ini quick settings, full editor and profiles.
+      - FSR4 DLL swap (INT8 / FP8 from OptiScaler Extras), with or without OptiScaler.
