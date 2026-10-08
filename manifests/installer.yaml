@@ -1,5 +1,12 @@
 AddonId: 1d4f96d1-ea52-4f70-9b3d-e2ec0a7d5f70
 Packages:
+  - Version: 0.1.1
+    RequiredApiVersion: 6.18.0
+    ReleaseDate: 2026-10-09
+    PackageUrl: https://github.com/xh1572/playnite-optiscaler/releases/download/v0.1.1/OptiScaler.Playnite_0.1.1.pext
+    Changelog:
+      - Unreal Engine games install next to the game executable again (Phoenix\Binaries\Win64 for Hogwarts Legacy) instead of into Engine\Binaries\Win64.
+      - An install recorded in the wrong folder is moved to the correct one on the next install or update.
   - Version: 0.1.0
     RequiredApiVersion: 6.18.0
     ReleaseDate: 2026-10-05

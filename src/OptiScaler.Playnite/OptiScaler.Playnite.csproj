@@ -10,7 +10,7 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AssemblyTitle>OptiScaler for Playnite</AssemblyTitle>
     <AssemblyDescription>Manage OptiScaler installations from Playnite.</AssemblyDescription>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <PlayniteSdkPath Condition="'$(PlayniteSdkPath)' == ''">D:\Program\Playnite\Playnite.SDK.dll</PlayniteSdkPath>
     <SharpCompressPath Condition="'$(SharpCompressPath)' == ''">D:\Program\Playnite\SharpCompress.dll</SharpCompressPath>
     <NewtonsoftJsonPath Condition="'$(NewtonsoftJsonPath)' == ''">D:\Program\Playnite\Newtonsoft.Json.dll</NewtonsoftJsonPath>
