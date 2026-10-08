@@ -90,6 +90,27 @@ namespace OptiScaler.Playnite.Core.Services
                         reapplySwapPackage = previous.Fsr4SwapPackagePath;
                         reapplySwapVersion = previous.Fsr4SwapVersion;
                         reapplySwapScope = previous.Fsr4SwapScope;
+                    }
+
+                    // A recorded install can sit in a different folder than the one resolved now (for
+                    // example an Unreal game whose engine folder used to win over the project folder).
+                    // Its relative paths would otherwise be applied to the new folder, so the old
+                    // install is undone in place first and this becomes a fresh install.
+                    if (previous != null && string.Equals(previous.OperationStatus, "committed", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(BackupStore.NormalizeDirectory(previous.InstalledGameDirectory), BackupStore.NormalizeDirectory(installDirectory), StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (Directory.Exists(previous.InstalledGameDirectory))
+                        {
+                            Uninstall(game);
+                        }
+                        else
+                        {
+                            backupStore.Delete(game.InstallDirectory);
+                        }
+                        previous = null;
+                    }
+                    else if (reapplySwapPackage != null)
+                    {
                         RestoreFsr4Dlls(game);
                         previous = backupStore.LoadManifest(game.InstallDirectory);
                     }
@@ -677,12 +698,39 @@ namespace OptiScaler.Playnite.Core.Services
             foreach (var executable in game.ExecutablePaths ?? new List<string>())
                 if (File.Exists(executable)) candidates.Add(Path.GetDirectoryName(executable));
 
-            var binaries = FindBinariesWin64(game.InstallDirectory);
-            if (binaries.Count > 0) candidates.InsertRange(0, binaries);
+            candidates.AddRange(FindBinariesWin64(game.InstallDirectory));
             candidates.Add(game.InstallDirectory);
-            foreach (var candidate in candidates.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
-                if (Directory.Exists(candidate)) return candidate;
-            return game.InstallDirectory;
+            var ordered = candidates
+                .Where(x => !string.IsNullOrWhiteSpace(x) && Directory.Exists(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(RankInstallDirectory)
+                .ToList();
+            return ordered.Count > 0 ? ordered[0] : game.InstallDirectory;
+        }
+
+        /// <summary>
+        /// Unreal ships the game in "&lt;Project&gt;\Binaries\Win64", while "Engine\Binaries\Win64" only
+        /// holds engine helpers such as the crash reporter, so the engine copy must never win.
+        /// </summary>
+        private static int RankInstallDirectory(string directory)
+        {
+            if (IsBinariesWin64(directory)) return IsEngineBinaries(directory) ? 3 : 0;
+            return 1;
+        }
+
+        private static bool IsBinariesWin64(string directory)
+        {
+            var parent = Path.GetDirectoryName(directory);
+            return parent != null &&
+                   string.Equals(Path.GetFileName(directory), "Win64", StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(Path.GetFileName(parent), "Binaries", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsEngineBinaries(string directory)
+        {
+            if (!IsBinariesWin64(directory)) return false;
+            var parent = Path.GetDirectoryName(Path.GetDirectoryName(directory));
+            return parent != null && string.Equals(Path.GetFileName(parent), "Engine", StringComparison.OrdinalIgnoreCase);
         }
 
         private void CopyTracked(string gameRoot, string installDirectory, string relative, string source, InstallationManifest manifest, bool wasPreviouslyCreated)
@@ -884,7 +932,8 @@ namespace OptiScaler.Playnite.Core.Services
             var result = new List<string>();
             if (!Directory.Exists(root)) return result;
             FindBinariesWin64(root, result, 0);
-            return result;
+            // Project folders before Engine, so callers that take the first hit get the game's copy.
+            return result.OrderBy(IsEngineBinaries).ToList();
         }
 
         private static void FindBinariesWin64(string directory, List<string> result, int depth)

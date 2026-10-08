@@ -293,12 +293,21 @@ namespace OptiScaler.Playnite.Core.Services
 
         private static IEnumerable<string> FindBinariesWin64(string root)
         {
+            var directories = new List<string>();
             foreach (var directory in ShallowDirectories(root, 5, 250))
             {
                 if (string.Equals(Path.GetFileName(directory), "Win64", StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(Path.GetFileName(Path.GetDirectoryName(directory)), "Binaries", StringComparison.OrdinalIgnoreCase))
-                    yield return directory;
+                    directories.Add(directory);
             }
+            // "Engine\Binaries\Win64" only holds engine helpers, so the game's own copy is checked first.
+            return directories.OrderBy(IsEngineBinaries);
+        }
+
+        private static bool IsEngineBinaries(string directory)
+        {
+            var parent = Path.GetDirectoryName(Path.GetDirectoryName(directory));
+            return parent != null && string.Equals(Path.GetFileName(parent), "Engine", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

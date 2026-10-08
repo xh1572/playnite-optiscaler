@@ -162,6 +162,61 @@ namespace OptiScaler.Playnite.Tests
             File.WriteAllText(Path.Combine(game.InstallDirectory, "Launcher.exe"), "stub");
             game.ExecutablePaths.Add(Path.Combine(game.InstallDirectory, "Launcher.exe"));
             Assert(string.Equals(new InstallationService(Path.Combine(root, "data-unreal")).ResolveInstallDirectory(game), win64, StringComparison.OrdinalIgnoreCase), "unreal directory resolution");
+
+            // Unreal game with the shipped exe in "<Project>\Binaries\Win64": Engine\Binaries\Win64
+            // only holds engine helpers (Hogwarts Legacy ships Phoenix\Binaries\Win64) and must never win.
+            game = CreateGame(root, "unreal-engine");
+            var project = Path.Combine(game.InstallDirectory, "Phoenix", "Binaries", "Win64");
+            var engine = Path.Combine(game.InstallDirectory, "Engine", "Binaries", "Win64");
+            Directory.CreateDirectory(project);
+            Directory.CreateDirectory(engine);
+            File.WriteAllText(Path.Combine(project, "HogwartsLegacy.exe"), "game");
+            File.WriteAllText(Path.Combine(engine, "CrashReportClient.exe"), "crash");
+            game.ExecutablePaths.Add(Path.Combine(project, "HogwartsLegacy.exe"));
+            var unrealData = Path.Combine(root, "data-unreal-engine");
+            var unrealService = new InstallationService(unrealData);
+            Assert(string.Equals(unrealService.ResolveInstallDirectory(game), project, StringComparison.OrdinalIgnoreCase), "engine Binaries does not win over project Binaries");
+
+            // Installing while only the engine folder is detected must also land in the project folder,
+            // and a stale install in Engine\Binaries\Win64 is moved out on the way.
+            game = CreateGame(root, "unreal-stale");
+            var staleProject = Path.Combine(game.InstallDirectory, "Phoenix", "Binaries", "Win64");
+            var staleEngine = Path.Combine(game.InstallDirectory, "Engine", "Binaries", "Win64");
+            Directory.CreateDirectory(staleProject);
+            Directory.CreateDirectory(staleEngine);
+            File.WriteAllText(Path.Combine(staleProject, "HogwartsLegacy.exe"), "game");
+            File.WriteAllText(Path.Combine(staleEngine, "CrashReportClient.exe"), "crash");
+            game.ExecutablePaths.Add(Path.Combine(staleProject, "HogwartsLegacy.exe"));
+            dataPath = Path.Combine(root, "data-unreal-stale");
+            service = new InstallationService(dataPath);
+            service.Install(game, packageV1, "dxgi.dll", "1.0.0");
+            Assert(File.Exists(Path.Combine(staleProject, "dxgi.dll")), "unreal install lands next to the game exe");
+            Assert(!File.Exists(Path.Combine(staleEngine, "dxgi.dll")), "unreal install skips the engine folder");
+            service.Uninstall(game);
+            Assert(File.Exists(Path.Combine(staleProject, "HogwartsLegacy.exe")) && !File.Exists(Path.Combine(staleProject, "dxgi.dll")), "unreal uninstall cleans the project folder");
+
+            // Simulates an install made before the resolver was fixed: with only the engine folder
+            // present the plugin used to write into it. That folder is now only a last resort, and
+            // once the game's own exe is known the install moves next to it.
+            game = CreateGame(root, "unreal-move");
+            var engineOnly = Path.Combine(game.InstallDirectory, "Engine", "Binaries", "Win64");
+            Directory.CreateDirectory(engineOnly);
+            File.WriteAllText(Path.Combine(engineOnly, "CrashReportClient.exe"), "crash");
+            dataPath = Path.Combine(root, "data-unreal-move");
+            service = new InstallationService(dataPath);
+            service.Install(game, packageV1, "dxgi.dll", "1.0.0");
+            Assert(File.Exists(Path.Combine(game.InstallDirectory, "dxgi.dll")), "engine Binaries is never chosen when only engine files exist");
+            Assert(!File.Exists(Path.Combine(engineOnly, "dxgi.dll")), "install avoids the engine folder");
+            var movedProject = Path.Combine(game.InstallDirectory, "Phoenix", "Binaries", "Win64");
+            Directory.CreateDirectory(movedProject);
+            File.WriteAllText(Path.Combine(movedProject, "HogwartsLegacy.exe"), "game");
+            game.ExecutablePaths.Add(Path.Combine(movedProject, "HogwartsLegacy.exe"));
+            service.Install(game, packageV1, "dxgi.dll", "1.0.0");
+            Assert(File.Exists(Path.Combine(movedProject, "dxgi.dll")), "reinstall moves to the project folder");
+            Assert(!File.Exists(Path.Combine(game.InstallDirectory, "dxgi.dll")), "reinstall removes the old game-root install");
+            Assert(File.Exists(Path.Combine(engineOnly, "CrashReportClient.exe")), "reinstall keeps unrelated engine files");
+            service.Uninstall(game);
+            Assert(!File.Exists(Path.Combine(movedProject, "dxgi.dll")) && File.Exists(Path.Combine(movedProject, "HogwartsLegacy.exe")), "moved install uninstalls cleanly");
         }
 
         private static void RunFsr4SwapTests(string root)
